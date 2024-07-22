@@ -1,0 +1,24 @@
+NO quoting (yet)
+
+
+builtins
+
+exit - exit program
+
+cd x - change directory (x) which can be existing directory path or from .saved_directories keys
+
+cd.. - move back x directories
+
+cd>> - change to last directory
+
+savedir x y - save key x as directory y
+
+history - display command history
+command history is only for current sessions - it is reset at the start of each session
+
+pipelines work
+
+
+aliases would be easy to add
+add more custom features
+maybe add some scripts
