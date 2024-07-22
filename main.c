@@ -29,9 +29,33 @@ void get_next_line(){
         perror("user_line malloc failed");
         exit(1);
     }
+    int tty_fd = open("/dev/tty", O_RDONLY);
+    if (tty_fd == -1) {
+        perror("open /dev/tty failed");
+        sleep(10000);
+    }
 
-    //Get next line
+    // Reassign stdin to the terminal device
+    if (dup2(tty_fd, STDIN_FILENO) == -1) {
+        perror("dup2 failed");
+        close(tty_fd);
+        sleep(1000000);
+    }
+
+    // Close the old file descriptor
+    close(tty_fd);
+    int flags = fcntl(STDIN_FILENO, F_GETFL);
+    if (flags == -1) {
+        perror("stdin is not open or is invalid");
+        sleep(100000);
+    }
+
+    if (!isatty(fileno(stdin))) {
+        printf("stdin is not a terminal.\n");
+        sleep(100000);
+    }
     fgets(user_line, MAX_USER_LINE, stdin);
+    fflush(stdin);
 
     //Log line to saved_directories
     fprintf(command_hist, "%s", user_line);
@@ -41,6 +65,7 @@ void get_next_line(){
         printf("FAILED TO LOAD .command_history file");
         return;
     }
+
 }
 
 /*
@@ -237,7 +262,6 @@ void execute_args() {
         j++;
     }
     command_index++;
-
     //Pipeline allocate
     pid_t pid;
     int i = 0;
@@ -296,12 +320,44 @@ void execute_args() {
     if (in != 0)
         dup2 (in, 0);
 
-    builtin_status = builtin_commands(commands_to_run[i][0]);
-    //This command goes to stdout
-    if(builtin_status == 0) {
+    pid_t pid2;
+    int status;
+
+    pid2 = fork();
+
+    if(pid < 0) {
+        perror("Fork failed");
+    }
+    else if (pid2 == 0) {
+        //child process
+        builtin_status = builtin_commands(commands_to_run[i][0]);
+        if(builtin_status != 1) {
         int status = execvp (commands_to_run[i][0], (char * const *)commands_to_run[i]);
         printf("STATUS: %d", status);
+        }
     }
+    else {
+        //parent process
+        if (waitpid(pid2, &status, 0) > 0) {
+            if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+                //printf("Child process completed successfully.\n");
+            } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+                //printf("Child process terminated with a non-zero exit status: %d\n", WEXITSTATUS(status));
+            } else {
+                printf("Child process did not terminate normally.\n");
+            }
+        } else {
+            perror("waitpid failed");
+        }
+    }
+
+    //builtin_status = builtin_commands(commands_to_run[i][0]);
+    //This command goes to stdout
+
+   // if(builtin_status == 0) {
+      //  int status = execvp (commands_to_run[i][0], (char * const *)commands_to_run[i]);
+     //   printf("STATUS: %d", status);
+    //}
     close(fd[0]);
     close(fd[1]);
 
@@ -315,6 +371,7 @@ void execute_args() {
         free(commands_to_run[i]);
     }
     free(commands_to_run);
+    dup2(in, 0);
 }
 
 
@@ -365,7 +422,7 @@ void cshell_loop() {
         command_prompt();
         parse_line_args();
         execute_args();
-        cleanup();
+        //cleanup();
     } while(user_exit);
 }
 
